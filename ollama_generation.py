@@ -107,7 +107,6 @@ class OllamaLLM(DeepEvalBaseLLM):
         chat_model = self.load_model()
         with get_openai_callback() as cb:
             res = await chat_model.ainvoke(prompt)
-            print("generate", res.content)
             if schema is not None:
                 try:
                     # Try to parse the response using the schema
