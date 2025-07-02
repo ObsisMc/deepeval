@@ -131,7 +131,7 @@ class OllamaLLM(DeepEvalBaseLLM):
 model_name = "llama3.2:1b"
 data_dir = "data"
 context_construction_config = ContextConstructionConfig(
-    max_contexts_per_document=1,
+    max_contexts_per_document=2,
     max_context_length=5,
     chunk_size=1024,
     context_quality_threshold=0.5,
