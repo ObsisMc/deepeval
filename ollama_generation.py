@@ -20,6 +20,7 @@ def async_exception_handler(func):
     async def wrapper(*args, **kwargs):
         max_patient = 5
         cur_patient = 0
+        return_e = None
         while cur_patient < max_patient:
             try:
                 return await func(*args, **kwargs)
@@ -28,8 +29,9 @@ def async_exception_handler(func):
                 print(
                     f"Attempt {cur_patient} failed for function {func.__name__}: {e}"
                 )
+                return_e = e
         print(f"Function {func.__name__} failed after {max_patient} attempts.")
-        raise e
+        raise return_e
 
     return wrapper
 
