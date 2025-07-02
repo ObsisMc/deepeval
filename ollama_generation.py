@@ -8,10 +8,10 @@ from deepeval.metrics.utils import trimAndLoadJson
 from langchain_community.callbacks import get_openai_callback
 from deepeval.synthesizer import Synthesizer
 from deepeval.synthesizer.config import ContextConstructionConfig
-from dotenv import load_dotenv
 import os
+from config import CustomConfig
 
-load_dotenv()
+custom_config = CustomConfig()
 
 
 def async_exception_handler(func):
@@ -56,7 +56,7 @@ class OllamaLLM(DeepEvalBaseLLM):
     def __init__(
         self,
         model_name: str,
-        base_url: str = "http://localhost:11434/v1/",
+        base_url: str = custom_config.ollama_url,
         json_mode: bool = True,
         temperature: float = 0,
         *args,
@@ -130,15 +130,10 @@ class OllamaLLM(DeepEvalBaseLLM):
         return GPTModel
 
 
-model_name = "llama3.2:1b"
-data_dir = "data"
-context_construction_config = ContextConstructionConfig(
-    max_contexts_per_document=2,
-    max_context_length=5,
-    chunk_size=1024,
-    context_quality_threshold=0.5,
-)
-
+model_name = custom_config.ollama_model  # or any other model you want to use
+data_dir = custom_config.data_dir
+output_dir = custom_config.output_dir
+context_construction_config = custom_config.context_construction_config
 
 model_local = OllamaLLM(model_name=model_name)
 
@@ -146,7 +141,7 @@ document_paths = [
     os.path.join(data_dir, f)
     for f in os.listdir(data_dir)
     if f.endswith(".txt")
-][:1]
+]
 
 for i, doc_path in enumerate(document_paths):
     synthesizer = Synthesizer(model=model_local)
@@ -161,6 +156,9 @@ for i, doc_path in enumerate(document_paths):
 
     # df.to_csv("goldens.csv", index=False)
     df.to_json(
-        f"goldens_{i}.json", orient="records", indent=2, force_ascii=False
+        os.path.join(output_dir, f"goldens_{i}.json"),
+        orient="records",
+        indent=2,
+        force_ascii=False,
     )
-    print("Goldens generated and saved to goldens.json")
+    print(f"Goldens generated and saved to {output_dir}/goldens_{i}.json")
