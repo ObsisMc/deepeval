@@ -30,6 +30,7 @@ If you didn't change the base url of Ollama previously, just keep the default va
 
 ## Quick Start
 
+### Use OpenAI API
 We have provided a sample txt in the `data/` folder. After configuring the `OPENAI_API_KEY`, you can have a quick try by running
 
 ```shell
@@ -63,7 +64,7 @@ The output format is like
 
 which is a list of Json object.
 
-### Custom Chat/Critic Model
+### Use Custom Chat/Critic Model (Ollama)
 
 We also provide an example for custom chat models, especially for Ollama. After setting up Ollama's config, run
 
@@ -74,6 +75,6 @@ python ollama_generation.py
 
 Pay attention: it only sets the chat/critic model be Ollama model, but the embedding model is still OpenAI's.
 
-### Custom Embedding Model
+### Use Custom Embedding Model
 
 To do...
