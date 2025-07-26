@@ -3,7 +3,7 @@ from typing import Optional, Tuple, List, Union, Any
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatResult
-from deepeval.models import DeepEvalBaseLLM
+from deepeval.models import DeepEvalBaseLLM, DeepEvalBaseEmbeddingModel, OllamaEmbeddingModel
 from deepeval.metrics.utils import trimAndLoadJson
 from langchain_community.callbacks import get_openai_callback
 from deepeval.synthesizer import Synthesizer
@@ -130,12 +130,29 @@ class OllamaLLM(DeepEvalBaseLLM):
         return GPTModel
 
 
+class CustomOllamaEmbeddingModel(OllamaEmbeddingModel):
+    def __init__(self, *args, **kwargs):
+        self.ip = os.environ.get("OLLAMA_EMBEDDING_IP", "localhost")
+        self.port = os.environ.get("OLLAMA_EMBEDDING_PORT", "11434")
+        self.base_url = f"http://{self.ip}:{self.port}"
+        model_name = os.environ.get("OLLAMA_EMBEDDING_MODEL")
+        self.api_key = os.environ.get("OLLAMA_EMBEDDING_API_KEY")
+
+        self.args = args
+        self.kwargs = kwargs
+        DeepEvalBaseEmbeddingModel.__init__(self, model_name)
+
+
 model_name = custom_config.ollama_model  # or any other model you want to use
 data_dir = custom_config.data_dir
 output_dir = custom_config.output_dir
 context_construction_config = custom_config.context_construction_config
 
 model_local = OllamaLLM(model_name=model_name)
+embedder_local = CustomOllamaEmbeddingModel()
+context_construction_config.embedder = embedder_local
+context_construction_config.critic_model = model_local
+print(context_construction_config)
 
 document_paths = [
     os.path.join(data_dir, f)
