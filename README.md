@@ -75,6 +75,10 @@ python ollama_generation.py
 
 Pay attention: it only sets the chat/critic model be Ollama model, but the embedding model is still OpenAI's.
 
-### Use Custom Embedding Model
+### Use Custom Embedding Model (Ollama)
 
-To do...
+Make sure you have the embedding model mentioned in the `.env.template`. Then run 
+
+```python
+python custom_embedder.py
+```
