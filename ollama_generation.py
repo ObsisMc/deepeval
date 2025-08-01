@@ -165,6 +165,7 @@ for i, doc_path in enumerate(document_paths):
     synthesizer.generate_goldens_from_docs(
         document_paths=[doc_path],
         context_construction_config=context_construction_config,
+        max_goldens_per_context=custom_config.max_goldens_per_context
     )
 
     df = synthesizer.to_pandas()
