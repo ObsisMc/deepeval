@@ -10,6 +10,7 @@ from deepeval.synthesizer import Synthesizer
 from deepeval.synthesizer.config import ContextConstructionConfig
 import os
 from config import CustomConfig
+import re
 
 custom_config = CustomConfig()
 
@@ -50,6 +51,13 @@ class CustomChatOpenAI(ChatOpenAI):
             kwargs["format"] = self.format
         return await super()._acreate(messages, **kwargs)
 
+def remove_thinking(res: str) -> str:
+    """Remove thinking patterns from the text."""
+    res = res.strip()
+    # Remove thinking patterns like "thinking: " or "thinking: "
+    res = re.sub(r"^<think>.*?</think>", "", res, count=1)
+    # Remove any trailing spaces or newlines
+    return res
 
 class OllamaLLM(DeepEvalBaseLLM):
 
@@ -91,6 +99,7 @@ class OllamaLLM(DeepEvalBaseLLM):
         # print("generate")
         with get_openai_callback() as cb:
             res = chat_model.invoke(prompt)
+            res.content = remove_thinking(res.content)
             if schema is not None:
                 try:
                     # Try to parse the response using the schema
@@ -109,6 +118,7 @@ class OllamaLLM(DeepEvalBaseLLM):
         chat_model = self.load_model()
         with get_openai_callback() as cb:
             res = await chat_model.ainvoke(prompt)
+            res.content = remove_thinking(res.content)
             if schema is not None:
                 try:
                     # Try to parse the response using the schema
