@@ -55,7 +55,7 @@ def remove_thinking(res: str) -> str:
     """Remove thinking patterns from the text."""
     res = res.strip()
     # Remove thinking patterns like "thinking: " or "thinking: "
-    res = re.sub(r"^<think>.*?</think>", "", res, count=1)
+    res = re.sub(r"^<think>[\s\S]*?</think>", "", res, count=1)
     # Remove any trailing spaces or newlines
     return res
 
