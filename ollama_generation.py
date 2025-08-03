@@ -3,7 +3,20 @@ from typing import Optional, Tuple, List, Union, Any
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatResult
-from deepeval.models import DeepEvalBaseLLM, DeepEvalBaseEmbeddingModel, OllamaEmbeddingModel
+from deepeval.models import (
+    DeepEvalBaseLLM,
+    DeepEvalBaseEmbeddingModel,
+    OllamaEmbeddingModel,
+    OllamaModel,
+)
+import logging
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    wait_exponential_jitter,
+    RetryCallState,
+    stop_after_attempt,
+)
 from deepeval.metrics.utils import trimAndLoadJson
 from langchain_community.callbacks import get_openai_callback
 from deepeval.synthesizer import Synthesizer
@@ -15,42 +28,7 @@ import re
 custom_config = CustomConfig()
 
 
-def async_exception_handler(func):
-
-    @functools.wraps(func)
-    async def wrapper(*args, **kwargs):
-        max_patient = 5
-        cur_patient = 0
-        return_e = None
-        while cur_patient < max_patient:
-            try:
-                return await func(*args, **kwargs)
-            except Exception as e:
-                cur_patient += 1
-                print(
-                    f"Attempt {cur_patient} failed for function {func.__name__}: {e}"
-                )
-                return_e = e
-        print(f"Function {func.__name__} failed after {max_patient} attempts.")
-        raise return_e
-
-    return wrapper
-
-
-class CustomChatOpenAI(ChatOpenAI):
-    format: str = None
-
-    def __init__(self, format: str = None, **kwargs):
-        super().__init__(**kwargs)
-        self.format = format
-
-    async def _acreate(
-        self, messages: List[BaseMessage], **kwargs
-    ) -> ChatResult:
-        if self.format:
-            kwargs["format"] = self.format
-        return await super()._acreate(messages, **kwargs)
-
+# NOT USED, but can be used to remove thinking patterns from the text
 def remove_thinking(res: str) -> str:
     """Remove thinking patterns from the text."""
     res = res.strip()
@@ -59,85 +37,50 @@ def remove_thinking(res: str) -> str:
     # Remove any trailing spaces or newlines
     return res
 
-class OllamaLLM(DeepEvalBaseLLM):
 
+def log_after(retry_state):
+    exception = retry_state.outcome.exception()
+    logging.error(
+        f"[Retry #{retry_state.attempt_number}] Exception: {exception!r}"
+    )
+
+
+class CustomOllamaModel(OllamaModel):
     def __init__(
         self,
-        model_name: str,
-        base_url: str = custom_config.ollama_url,
-        json_mode: bool = True,
+        model: Optional[str] = None,
+        base_url: Optional[str] = custom_config.ollama_url,
         temperature: float = 0,
-        *args,
         **kwargs,
     ):
-
-        self.model_name = model_name
         self.base_url = base_url
-        self.json_mode = json_mode
+        self.model_name = model
+        if temperature < 0:
+            raise ValueError("Temperature must be >= 0.")
         self.temperature = temperature
-        self.args = args
-        self.kwargs = kwargs
-        super().__init__(model_name)
+        DeepEvalBaseLLM.__init__(self, self.model_name)
 
-    def load_model(self) -> CustomChatOpenAI:
-        """Load and configure the Ollama model."""
-        return CustomChatOpenAI(
-            model_name=self.model_name,
-            openai_api_key="ollama",
-            base_url=self.base_url,
-            format="json" if self.json_mode else None,
-            temperature=self.temperature,
-            *self.args,
-            **self.kwargs,
-        )
+    def __getattribute__(self, name):
+        attr = super().__getattribute__(name)
 
-    def generate(
-        self, prompt: str, schema: Any = None
-    ) -> Union[Any, Tuple[str, float]]:
+        # Wrap only callable methods from the superclass
+        if (
+            callable(attr)
+            and not name.startswith("__")
+            and hasattr(OllamaModel, name)
+        ):
 
-        chat_model = self.load_model()
-        # print("generate")
-        with get_openai_callback() as cb:
-            res = chat_model.invoke(prompt)
-            res.content = remove_thinking(res.content)
-            if schema is not None:
-                try:
-                    # Try to parse the response using the schema
-                    data = trimAndLoadJson(res.content, None)
-                    return schema(**data), 0.0
-                except Exception:
-                    # If schema parsing fails, return parsed JSON
-                    return trimAndLoadJson(res.content, None)
-            return res.content, 0.0
+            # add retry logic to all methods except built-in ones
+            return retry(
+                # wait=wait_exponential_jitter(
+                #     initial=1, exp_base=2, jitter=2, max=10
+                # ),
+                stop=stop_after_attempt(5),
+                retry=retry_if_exception_type(Exception),
+                after=log_after,
+            )(attr)
 
-    @async_exception_handler
-    async def a_generate(
-        self, prompt: str, schema: Any = None
-    ) -> Union[Any, Tuple[str, float]]:
-
-        chat_model = self.load_model()
-        with get_openai_callback() as cb:
-            res = await chat_model.ainvoke(prompt)
-            res.content = remove_thinking(res.content)
-            if schema is not None:
-                try:
-                    # Try to parse the response using the schema
-                    data = trimAndLoadJson(res.content, None)
-                    return schema(**data), 0.0
-                except Exception:
-                    # If schema parsing fails, return parsed JSON
-                    return trimAndLoadJson(res.content, None)
-            return res.content, 0.0
-
-    def get_model_name(self) -> str:
-        """Get the name of the current model."""
-        return self.model_name
-
-    @property
-    def __class__(self):
-        from deepeval.models import GPTModel
-
-        return GPTModel
+        return attr
 
 
 class CustomOllamaEmbeddingModel(OllamaEmbeddingModel):
@@ -158,7 +101,7 @@ data_dir = custom_config.data_dir
 output_dir = custom_config.output_dir
 context_construction_config = custom_config.context_construction_config
 
-model_local = OllamaLLM(model_name=model_name)
+model_local = CustomOllamaModel(model=model_name)
 embedder_local = CustomOllamaEmbeddingModel()
 context_construction_config.embedder = embedder_local
 context_construction_config.critic_model = model_local
@@ -175,7 +118,7 @@ for i, doc_path in enumerate(document_paths):
     synthesizer.generate_goldens_from_docs(
         document_paths=[doc_path],
         context_construction_config=context_construction_config,
-        max_goldens_per_context=custom_config.max_goldens_per_context
+        max_goldens_per_context=custom_config.max_goldens_per_context,
     )
 
     df = synthesizer.to_pandas()
