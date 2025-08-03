@@ -24,8 +24,10 @@ from deepeval.synthesizer.config import ContextConstructionConfig
 import os
 from config import CustomConfig
 import re
+import logging
 
 custom_config = CustomConfig()
+logging.basicConfig(level=logging.INFO)
 
 
 # NOT USED, but can be used to remove thinking patterns from the text
@@ -122,6 +124,12 @@ for i, doc_path in enumerate(document_paths):
     )
 
     df = synthesizer.to_pandas()
+
+    logging.info(f"Generated {len(df)} goldens")
+    df.drop_duplicates(subset=["input", "expected_output"], inplace=True)
+    df.reset_index(drop=True, inplace=True)
+    logging.info(f"After deduplication, {len(df)} goldens remain")
+
     df.insert(0, "id", df.index)
     df.drop(columns=["context"], inplace=True)
 
@@ -132,4 +140,6 @@ for i, doc_path in enumerate(document_paths):
         indent=2,
         force_ascii=False,
     )
-    print(f"Goldens generated and saved to {output_dir}/goldens_{i}.json")
+    logging.info(
+        f"Goldens generated and saved to {output_dir}/goldens_{i}.json"
+    )
